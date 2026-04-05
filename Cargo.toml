@@ -1,0 +1,12 @@
+[package]
+name = "piper_rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+burn = {version = ">=0.21.0-pre.2", features = ["tch", "fusion"]}
+burn-backend = {version = ">=0.21.0-pre.2"}
+burn-store = {version = ">=0.21.0-pre.2", features = ["safetensors", "pytorch"]}
+hound = "3.5.1"
+num-traits = "0.2.19"
+burn-trace-shapes = {path="crates/burn-trace-shapes"}
