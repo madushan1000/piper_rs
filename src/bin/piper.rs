@@ -121,6 +121,10 @@ fn convert(
         .unwrap_or(1.0);
     let inference_noise_w = model_config["inference"]["noise_w"].as_f64().unwrap_or(0.8);
 
+    let sample_rate = model_config["audio"]["sample_rate"]
+        .as_u64()
+        .unwrap_or(22050);
+
     let config = VitsConfig::new();
     let config = config
         .with_phoneme_id_map(phoneme_id_map)
@@ -130,6 +134,7 @@ fn convert(
         .with_inference_length_scale(inference_length_scale)
         .with_inference_noise_w(inference_noise_w)
         .with_speaker_id_map(speaker_id_map)
+        .with_sample_rate(sample_rate as usize)
         .with_name(model_name);
 
     let config = match model_quality {
