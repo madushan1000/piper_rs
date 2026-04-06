@@ -1,5 +1,8 @@
+use std::error;
+pub mod utils;
 pub mod vits;
-use burn;
+
+pub type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
 
 #[macro_export]
 macro_rules! print_tensor {

@@ -1,4 +1,4 @@
-use std::{any::type_name_of_val, f64::consts::PI};
+use std::{any::type_name_of_val, collections::HashMap, f64::consts::PI};
 
 use burn::{
     Tensor,
@@ -110,6 +110,22 @@ pub struct VitsConfig {
     // unused
     #[config(default = "None")]
     dataset: Option<()>,
+    #[config(default = "None")]
+    pub phoneme_id_map: Option<HashMap<String, i64>>,
+    #[config(default = "\"piper\".into()")]
+    pub name: String,
+    #[config(default = "\"medium\".into()")]
+    pub quality: String,
+    #[config(default = "\"en-us\".into()")]
+    pub espeak_voice: String,
+    #[config(default = 0.667)]
+    pub inference_noise_scale: f64,
+    #[config(default = 1.0)]
+    pub inference_length_scale: f64,
+    #[config(default = 0.8)]
+    pub inference_noise_w: f64,
+    #[config(default = "None")]
+    pub speaker_id_map: Option<HashMap<String, i64>>
 }
 
 impl VitsConfig {
@@ -146,6 +162,7 @@ impl VitsConfig {
             .with_use_sdp(self.use_sdp)
             .init(device),
             model_d: MultiPeriodDiscriminatorConfig::new().init(device),
+            sample_rate: self.sample_rate,
         }
     }
 }
@@ -154,6 +171,7 @@ impl VitsConfig {
 pub struct VitsModel<B: Backend> {
     pub model_g: SynthesizerTrn<B>,
     pub model_d: MultiPeriodDiscriminator<B>,
+    pub sample_rate: usize,
 }
 
 impl<B: Backend> VitsModel<B> {
@@ -1084,6 +1102,7 @@ impl ResBlock1Config {
                     .with_padding(get_padding(self.kernel_size, self.dilation[2]))
                     .init(device),
             ],
+            //self.convs1.apply(init_weights)
             convs2: vec![
                 WNConv1dConfig::new(self.channels, self.channels, self.kernel_size)
                     .with_stride(1)
@@ -1101,6 +1120,8 @@ impl ResBlock1Config {
                     .with_padding(get_padding(self.kernel_size, 1))
                     .init(device),
             ],
+            //self.convs2.apply(init_weights)
+            lrelu_slope: 0.1,
         }
     }
 }
@@ -1113,11 +1134,32 @@ fn get_padding(kernel_size: usize, dilation: usize) -> usize {
 pub struct ResBlock1<B: Backend> {
     convs1: Vec<WNConv1d<B>>,
     convs2: Vec<WNConv1d<B>>,
+    lrelu_slope: f64,
 }
 
 impl<B: Backend> ResBlock1<B> {
-    pub fn forward(&self, x: Tensor<B, 3>, x_mask: Option<Tensor<B, 3>>) -> Tensor<B, 3> {
-        todo!()
+    pub fn forward(&self, mut x: Tensor<B, 3>, x_mask: Option<Tensor<B, 3>>) -> Tensor<B, 3> {
+        for (c1, c2) in self.convs1.iter().zip(self.convs2.iter()) {
+            let xt = leaky_relu(x.clone(), self.lrelu_slope);
+            let xt = match x_mask {
+                Some(ref x_mask) => xt * x_mask.clone(),
+                None => xt,
+            };
+            let xt = c1.forward(xt);
+            let xt = leaky_relu(xt, self.lrelu_slope);
+            let xt = match x_mask {
+                Some(ref x_mask) => xt * x_mask.clone(),
+                None => xt,
+            };
+            let xt = c2.forward(xt);
+            x = xt + x;
+        }
+
+        x = match x_mask {
+            Some(ref x_mask) => x * x_mask.clone(),
+            None => x,
+        };
+        x
     }
 }
 
